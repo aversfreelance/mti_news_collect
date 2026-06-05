@@ -1,4 +1,3 @@
-python
 import os
 import re
 import json
@@ -23,31 +22,11 @@ ARTICLES_PER_SECTION = int(os.getenv("ARTICLES_PER_SECTION", "5"))
 HEADLESS = os.getenv("HEADLESS", "1") != "0"
 
 SECTIONS = {
-    "kozelet": {
-        "name": "Közélet",
-        "url": "https://mti.hu/kozelet",
-        "category": "hirek"
-    },
-    "gazdasag": {
-        "name": "Gazdaság",
-        "url": "https://mti.hu/gazdasag",
-        "category": "hirek"
-    },
-    "vilag": {
-        "name": "Külföld",
-        "url": "https://mti.hu/vilag",
-        "category": "hirek"
-    },
-    "kultura": {
-        "name": "Kultúra",
-        "url": "https://mti.hu/kultura",
-        "category": "turizmus"
-    },
-    "sport": {
-        "name": "Sport",
-        "url": "https://mti.hu/sport",
-        "category": "sport"
-    },
+    "kozelet": {"name": "Közélet", "url": "https://mti.hu/kozelet", "category": "hirek"},
+    "gazdasag": {"name": "Gazdaság", "url": "https://mti.hu/gazdasag", "category": "hirek"},
+    "vilag": {"name": "Külföld", "url": "https://mti.hu/vilag", "category": "hirek"},
+    "kultura": {"name": "Kultúra", "url": "https://mti.hu/kultura", "category": "turizmus"},
+    "sport": {"name": "Sport", "url": "https://mti.hu/sport", "category": "sport"},
 }
 
 PEST_COUNTY_CITIES = [
@@ -105,29 +84,23 @@ def normalize_date(text: str) -> str:
 
 def detect_pest_city(title: str, body: str) -> str:
     haystack = f" {title} {body} ".lower()
-
     for city in PEST_COUNTY_CITIES:
         pattern = r"(?<![a-záéíóöőúüű])" + re.escape(city.lower()) + r"(?![a-záéíóöőúüű])"
         if re.search(pattern, haystack):
             return city
-
     return ""
 
 
 def is_probably_article_link(href: str, text: str) -> bool:
     if not href:
         return False
-
     href_l = href.lower()
     text = clean_text(text)
-
     if len(text) < 15:
         return False
-
     bad = ["javascript:", "#", "mailto:", "/login", "/belepes", "/regisztracio"]
     if any(href_l.startswith(x) or x in href_l for x in bad):
         return False
-
     return any(x in href_l for x in ["/hir", "hir=", "/cikk", "news", "article", "/mti"])
 
 
@@ -185,7 +158,6 @@ def login_if_needed(page):
     ]
 
     clicked = False
-
     for sel in submit_selectors:
         try:
             if page.locator(sel).first.is_visible(timeout=1000):
@@ -208,7 +180,6 @@ def login_if_needed(page):
 
 def collect_section_links(page, section_url: str, limit: int) -> list[str]:
     page.goto(section_url, wait_until="domcontentloaded")
-
     try:
         page.wait_for_load_state("networkidle", timeout=10000)
     except PlaywrightTimeoutError:
@@ -220,7 +191,6 @@ def collect_section_links(page, section_url: str, limit: int) -> list[str]:
     for a in soup.find_all("a", href=True):
         text = clean_text(a.get_text(" "))
         href = a.get("href", "")
-
         if is_probably_article_link(href, text):
             full_url = urljoin(section_url, href)
             if urlparse(full_url).netloc.endswith("mti.hu"):
@@ -228,7 +198,6 @@ def collect_section_links(page, section_url: str, limit: int) -> list[str]:
 
     seen = set()
     unique = []
-
     for link in links:
         if link not in seen:
             seen.add(link)
@@ -247,7 +216,6 @@ def extract_best_image(soup: BeautifulSoup, base_url: str) -> str:
         return urljoin(base_url, tw["content"])
 
     article = soup.find("article") or soup.find("main") or soup.body
-
     if article:
         for img in article.find_all("img"):
             src = img.get("src") or img.get("data-src") or img.get("data-original")
@@ -265,7 +233,6 @@ def extract_best_image(soup: BeautifulSoup, base_url: str) -> str:
 
 def parse_article(page, url: str, section_info: dict) -> dict | None:
     page.goto(url, wait_until="domcontentloaded")
-
     try:
         page.wait_for_load_state("networkidle", timeout=10000)
     except PlaywrightTimeoutError:
@@ -282,7 +249,6 @@ def parse_article(page, url: str, section_info: dict) -> dict | None:
 
     date_text = ""
     time_el = soup.find("time")
-
     if time_el:
         date_text = time_el.get("datetime") or time_el.get_text(" ")
 
@@ -354,12 +320,10 @@ def main():
 
         for key, section in SECTIONS.items():
             print(f"\nRovat: {section['name']} — {section['url']}")
-
             links = collect_section_links(page, section["url"], ARTICLES_PER_SECTION)
             print(f"Talált link: {len(links)}")
 
             count = 0
-
             for link in links:
                 if link in seen_urls:
                     continue
