@@ -16,7 +16,7 @@ load_dotenv()
 
 MTI_USERNAME = os.getenv("MTI_USERNAME", "")
 MTI_PASSWORD = os.getenv("MTI_PASSWORD", "")
-MTI_LOGIN_URL = os.getenv("MTI_LOGIN_URL", "https://mti.hu")
+MTI_LOGIN_URL = os.getenv("MTI_LOGIN_URL", https://mti.hu/regisztralt-latogatok-bejelentkezes/realms/visitor/protocol/openid-connect/auth?response_type=code&client_id=frontend&redirect_uri=https%3A%2F%2Fmti.hu%2Fauth%2Fcallback%2Fvisitor&ui_locales=hu&code_challenge=vrdKEhV-vzssn4_f_gMQh99L1KrUFu8B2h3L0k1CjLo&code_challenge_method=S256&scope=openid+profile+email")
 OUTPUT_FILE = os.getenv("OUTPUT_FILE", "public/import/pest-megye-news.json")
 ARTICLES_PER_SECTION = int(os.getenv("ARTICLES_PER_SECTION", "5"))
 HEADLESS = os.getenv("HEADLESS", "1") != "0"
