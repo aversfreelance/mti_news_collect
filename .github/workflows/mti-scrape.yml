@@ -28,7 +28,7 @@ jobs:
         env:
           MTI_USERNAME: ${{ secrets.MTI_USERNAME }}
           MTI_PASSWORD: ${{ secrets.MTI_PASSWORD }}
-          MTI_LOGIN_URL: 'https://mti.hu/regisztralt-latogatok-bejelentkezes'
+          MTI_LOGIN_URL: 'https://mti.hu/bejelentkezes'
           OUTPUT_FILE: public/import/pest-megye-news.json
           ARTICLES_PER_SECTION: '5'
           HEADLESS: '1'
