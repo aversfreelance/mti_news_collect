@@ -1,0 +1,45 @@
+name: MTI rovat scraper
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */3 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
+
+      - name: Run scraper
+        env:
+          MTI_USERNAME: ${{ secrets.MTI_USERNAME }}
+          MTI_PASSWORD: ${{ secrets.MTI_PASSWORD }}
+          MTI_LOGIN_URL: https://mti.hu
+          OUTPUT_FILE: public/import/pest-megye-news.json
+          ARTICLES_PER_SECTION: "5"
+          HEADLESS: "1"
+        run: python mti_rovat_scraper.py
+
+      - name: Commit generated JSON
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add public/import/pest-megye-news.json
+          git commit -m "Update MTI import JSON" || echo "No changes to commit"
+          git push
