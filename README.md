@@ -1,35 +1,79 @@
-# MTI → Pest Megyei Hírlap JSON import
+# MTI rovat scraper → Pest Megyei Hírlap import JSON
 
-Ez egy Playwright-alapú scraper-váz, amely:
-1. belép az mti.hu felületére,
-2. megpróbálja kigyűjteni a 15 legfrissebb hírt,
-3. egyszerű, óvatos szövegátírást végez,
-4. létrehozza a Pest Megyei Hírlap admin importjához használható JSON-fájlt.
+Ez a csomag belépés után rovatonként legfeljebb 5 friss MTI-cikket gyűjt le:
 
-## Telepítés
+- Közélet: `https://mti.hu/kozelet`
+- Gazdaság: `https://mti.hu/gazdasag`
+- Külföld: `https://mti.hu/vilag`
+- Kultúra: `https://mti.hu/kultura`
+- Sport: `https://mti.hu/sport`
 
-```bash
-pip install -r requirements.txt
-playwright install chromium
-cp .env.example .env
-```
-
-Töltsd ki a `.env` fájlt.
-
-## Futtatás
-
-```bash
-python mti_scrape_to_pmh_json.py
-```
-
-A kimenet alapból:
+A kimenet:
 
 ```text
 public/import/pest-megye-news.json
 ```
 
-Ezt GitHubra feltöltve raw URL-ként be tudod tölteni az admin felületen.
+A JSON tartalmazza a kép URL-jét is az `image` mezőben.
 
-## Fontos
+## Telepítés helyben
 
-A bejelentkezési adatokat ne tedd bele publikus GitHub repóba. Használj `.env` fájlt helyben, GitHub Actions esetén pedig GitHub Secrets-et.
+```bash
+pip install -r requirements.txt
+playwright install chromium
+copy .env.example .env
+```
+
+Windows PowerShellben inkább:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Majd töltsd ki a `.env` fájlt.
+
+## Futtatás
+
+```bash
+python mti_rovat_scraper.py
+```
+
+## JSON struktúra
+
+```json
+[
+  {
+    "title": "",
+    "category": "hirek",
+    "city": "",
+    "excerpt": "",
+    "body": "",
+    "author": "MTI",
+    "url": "",
+    "date": "YYYY-MM-DD",
+    "image": "",
+    "titleEn": "",
+    "excerptEn": "",
+    "bodyEn": "",
+    "videoUrl": "",
+    "audioUrl": ""
+  }
+]
+```
+
+## Pest megyei városok kezelése
+
+Ha a cikk szövegében vagy címében szerepel Pest vármegye, Pest megye, vagy valamelyik ismert Pest megyei település neve, a script kitölti a `city` mezőt.  
+Ha csak általános Pest megyei kapcsolódás van, de nincs konkrét város, akkor a `city` üres marad.
+
+## GitHub Actions
+
+A `.github/workflows/mti-scrape.yml` fájl kézzel indítható workflow-t tartalmaz.  
+A repóban állítsd be ezeket:
+
+Repository → Settings → Secrets and variables → Actions → New repository secret
+
+- `MTI_USERNAME`
+- `MTI_PASSWORD`
+
+Ezután az Actions fülön kézzel indítható a scraper.

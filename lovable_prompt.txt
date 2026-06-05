@@ -1,0 +1,23 @@
+Lovable utasítás admin gombhoz:
+
+Az admin felületen hozz létre egy új gombot: „MTI rovatok lekérése”.
+
+A gomb ne frontendből scrape-eljen, hanem server-side folyamatot indítson.
+
+Javasolt megoldás:
+1. A gomb indítson egy server endpointot: /api/run-mti-scraper
+2. Az endpoint indítsa el a GitHub Actions workflow_dispatch eseményt ennél a workflow-nál:
+   .github/workflows/mti-scrape.yml
+3. A workflow lefuttatja a mti_rovat_scraper.py scriptet.
+4. A script létrehozza/frissíti ezt a fájlt:
+   public/import/pest-megye-news.json
+5. A workflow commitolja és pusholja a friss JSON fájlt.
+6. Siker esetén az admin oldalon jelenjen meg:
+   „MTI rovatok lekérése elindítva. A JSON néhány percen belül importálható.”
+7. Az import URL:
+   https://raw.githubusercontent.com/aversfreelance/news_collector/main/public/import/pest-megye-news.json
+
+Fontos:
+- MTI felhasználónevet és jelszót tilos frontendben tárolni.
+- MTI_USERNAME és MTI_PASSWORD kizárólag GitHub Secrets vagy server environment variable legyen.
+- A gomb csak jogosult admin felhasználónál látszódjon.
