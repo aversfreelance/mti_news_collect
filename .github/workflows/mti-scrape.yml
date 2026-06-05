@@ -1,31 +1,39 @@
 name: MTI rovat scraper
+
 on:
   workflow_dispatch:
+
 permissions:
   contents: write
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
           playwright install chromium
+
       - name: Run scraper
         env:
           MTI_USERNAME: ${{ secrets.MTI_USERNAME }}
           MTI_PASSWORD: ${{ secrets.MTI_PASSWORD }}
-MTI_LOGIN_URL: 'https://mti.hu/regisztralt-latogatok-bejelentkezes/realms/visitor/protocol/openid-connect/auth?response_type=code&client_id=frontend&redirect_uri=https%3A%2F%2Fmti.hu%2Fauth%2Fcallback%2Fvisitor&ui_locales=hu&code_challenge=vrdKEhV-vzssn4_f_gMQh99L1KrUFu8B2h3L0k1CjLo&code_challenge_method=S256&scope=openid+profile+email'
+          MTI_LOGIN_URL: 'https://mti.hu/regisztralt-latogatok-bejelentkezes/realms/visitor/protocol/openid-connect/auth?response_type=code&client_id=frontend&redirect_uri=https%3A%2F%2Fmti.hu%2Fauth%2Fcallback%2Fvisitor&ui_locales=hu&code_challenge=vrdKEhV-vzssn4_f_gMQh99L1KrUFu8B2h3L0k1CjLo&code_challenge_method=S256&scope=openid+profile+email'
           OUTPUT_FILE: public/import/pest-megye-news.json
           ARTICLES_PER_SECTION: '5'
           HEADLESS: '1'
         run: python mti_rovat_scraper.py
+
       - name: Commit generated JSON
         run: |
           git config user.name "github-actions"
