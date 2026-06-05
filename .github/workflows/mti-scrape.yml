@@ -1,0 +1,12 @@
+name: MTI rovat scraper
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Test
+        run: echo "MTI workflow működik"
