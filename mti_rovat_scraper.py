@@ -210,9 +210,19 @@ def is_article_link(href: str, text: str) -> bool:
         return False
     href_l = href.lower()
     text = clean_text(text)
-
+    
     if len(text) < 15:
         return False
+bad_extensions = [
+    ".pdf",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".zip"
+]
+if any(href.lower().endswith(ext) for ext in bad_extensions):
+    return False
 
     bad_parts = [
         "javascript:", "mailto:", "#", "/login", "/auth/", "/regisztralt-latogatok",
