@@ -10,7 +10,6 @@ jobs:
 scrape:
 runs-on: ubuntu-latest
 
-```
 steps:
   - name: Checkout repository
     uses: actions/checkout@v4
@@ -42,4 +41,3 @@ steps:
       git add public/import/pest-megye-news.json
       git commit -m "Update MTI import JSON" || echo "No changes to commit"
       git push
-```
