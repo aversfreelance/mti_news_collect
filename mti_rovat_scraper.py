@@ -1,3 +1,4 @@
+```python
 import os
 import re
 import json
@@ -16,7 +17,8 @@ load_dotenv()
 
 MTI_USERNAME = os.getenv("MTI_USERNAME", "")
 MTI_PASSWORD = os.getenv("MTI_PASSWORD", "")
-MTI_LOGIN_URL = os.getenv("MTI_LOGIN_URL", "https://mti.hu")OUTPUT_FILE = os.getenv("OUTPUT_FILE", "public/import/pest-megye-news.json")
+MTI_LOGIN_URL = os.getenv("MTI_LOGIN_URL", "https://mti.hu")
+OUTPUT_FILE = os.getenv("OUTPUT_FILE", "public/import/pest-megye-news.json")
 ARTICLES_PER_SECTION = int(os.getenv("ARTICLES_PER_SECTION", "5"))
 HEADLESS = os.getenv("HEADLESS", "1") != "0"
 
@@ -69,10 +71,6 @@ def clean_text(text: str) -> str:
 
 
 def light_rewrite(text: str) -> str:
-    """
-    Óvatos átírás. Nem talál ki új tényeket.
-    Csak néhány hírügynökségi fordulatot cserél, és tisztítja a szöveget.
-    """
     text = clean_text(text)
     replacements = [
         (r"\bközölte\b", "ismertette"),
@@ -113,30 +111,29 @@ def detect_pest_city(title: str, body: str) -> str:
         if re.search(pattern, haystack):
             return city
 
-    if "pest vármegye" in haystack or "pest megye" in haystack:
-        return ""
-
     return ""
 
 
 def is_probably_article_link(href: str, text: str) -> bool:
     if not href:
         return False
+
     href_l = href.lower()
     text = clean_text(text)
+
     if len(text) < 15:
         return False
+
     bad = ["javascript:", "#", "mailto:", "/login", "/belepes", "/regisztracio"]
     if any(href_l.startswith(x) or x in href_l for x in bad):
         return False
+
     return any(x in href_l for x in ["/hir", "hir=", "/cikk", "news", "article", "/mti"])
 
 
 def login_if_needed(page):
     page.goto(MTI_LOGIN_URL, wait_until="domcontentloaded")
 
-    # Ha nincs login mező, feltételezzük, hogy nem kell külön login ezen az URL-en,
-    # vagy már sessionben vagyunk.
     username_selectors = [
         'input[name="username"]',
         'input[name="email"]',
@@ -146,6 +143,7 @@ def login_if_needed(page):
         '#email',
         '#login',
     ]
+
     password_selectors = [
         'input[name="password"]',
         'input[type="password"]',
@@ -157,7 +155,7 @@ def login_if_needed(page):
 
     for sel in username_selectors:
         try:
-            if page.locator(sel).first.is_visible(timeout=1200):
+            if page.locator(sel).first.is_visible(timeout=2000):
                 user_sel = sel
                 break
         except Exception:
@@ -165,7 +163,7 @@ def login_if_needed(page):
 
     for sel in password_selectors:
         try:
-            if page.locator(sel).first.is_visible(timeout=1200):
+            if page.locator(sel).first.is_visible(timeout=2000):
                 pass_sel = sel
                 break
         except Exception:
@@ -186,14 +184,18 @@ def login_if_needed(page):
         'button:has-text("Login")',
     ]
 
+    clicked = False
+
     for sel in submit_selectors:
         try:
             if page.locator(sel).first.is_visible(timeout=1000):
                 page.locator(sel).first.click()
+                clicked = True
                 break
         except Exception:
             continue
-    else:
+
+    if not clicked:
         page.keyboard.press("Enter")
 
     try:
@@ -201,9 +203,12 @@ def login_if_needed(page):
     except PlaywrightTimeoutError:
         pass
 
+    print("Login utáni URL:", page.url)
+
 
 def collect_section_links(page, section_url: str, limit: int) -> list[str]:
     page.goto(section_url, wait_until="domcontentloaded")
+
     try:
         page.wait_for_load_state("networkidle", timeout=10000)
     except PlaywrightTimeoutError:
@@ -215,6 +220,7 @@ def collect_section_links(page, section_url: str, limit: int) -> list[str]:
     for a in soup.find_all("a", href=True):
         text = clean_text(a.get_text(" "))
         href = a.get("href", "")
+
         if is_probably_article_link(href, text):
             full_url = urljoin(section_url, href)
             if urlparse(full_url).netloc.endswith("mti.hu"):
@@ -222,6 +228,7 @@ def collect_section_links(page, section_url: str, limit: int) -> list[str]:
 
     seen = set()
     unique = []
+
     for link in links:
         if link not in seen:
             seen.add(link)
@@ -231,16 +238,16 @@ def collect_section_links(page, section_url: str, limit: int) -> list[str]:
 
 
 def extract_best_image(soup: BeautifulSoup, base_url: str) -> str:
-    # OpenGraph kép a legjobb, ha van.
-    for selector in [
-        ('meta', {'property': 'og:image'}),
-        ('meta', {'name': 'twitter:image'}),
-    ]:
-        tag = soup.find(*selector)
-        if tag and tag.get("content"):
-            return urljoin(base_url, tag["content"])
+    og = soup.find("meta", property="og:image")
+    if og and og.get("content"):
+        return urljoin(base_url, og["content"])
+
+    tw = soup.find("meta", attrs={"name": "twitter:image"})
+    if tw and tw.get("content"):
+        return urljoin(base_url, tw["content"])
 
     article = soup.find("article") or soup.find("main") or soup.body
+
     if article:
         for img in article.find_all("img"):
             src = img.get("src") or img.get("data-src") or img.get("data-original")
@@ -258,6 +265,7 @@ def extract_best_image(soup: BeautifulSoup, base_url: str) -> str:
 
 def parse_article(page, url: str, section_info: dict) -> dict | None:
     page.goto(url, wait_until="domcontentloaded")
+
     try:
         page.wait_for_load_state("networkidle", timeout=10000)
     except PlaywrightTimeoutError:
@@ -274,11 +282,11 @@ def parse_article(page, url: str, section_info: dict) -> dict | None:
 
     date_text = ""
     time_el = soup.find("time")
+
     if time_el:
         date_text = time_el.get("datetime") or time_el.get_text(" ")
 
     if not date_text:
-        # Egyszerű dátumkeresés a teljes oldalban.
         all_text = clean_text(soup.get_text(" "))
         m = re.search(r"20\d{2}\.\s*\w+\s*\d{1,2}\.|20\d{2}-\d{2}-\d{2}", all_text)
         if m:
@@ -286,13 +294,13 @@ def parse_article(page, url: str, section_info: dict) -> dict | None:
 
     article = soup.find("article") or soup.find("main") or soup.body
     paragraphs = []
+
     if article:
-        for p in article.find_all(["p"]):
+        for p in article.find_all("p"):
             txt = clean_text(p.get_text(" "))
             if len(txt) > 35 and txt not in paragraphs:
                 paragraphs.append(txt)
 
-    # Ha nincsenek p tagek, próbálkozzunk hosszabb div-ekkel.
     if len(paragraphs) < 2 and article:
         for div in article.find_all("div"):
             txt = clean_text(div.get_text(" "))
@@ -329,7 +337,7 @@ def parse_article(page, url: str, section_info: dict) -> dict | None:
 
 def main():
     if not MTI_USERNAME or not MTI_PASSWORD:
-        print("Figyelem: nincs MTI_USERNAME vagy MTI_PASSWORD. Ha az oldal loginos, így nem fog sikerülni.")
+        print("Figyelem: nincs MTI_USERNAME vagy MTI_PASSWORD.")
 
     out_path = Path(OUTPUT_FILE)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -346,13 +354,16 @@ def main():
 
         for key, section in SECTIONS.items():
             print(f"\nRovat: {section['name']} — {section['url']}")
+
             links = collect_section_links(page, section["url"], ARTICLES_PER_SECTION)
             print(f"Talált link: {len(links)}")
 
             count = 0
+
             for link in links:
                 if link in seen_urls:
                     continue
+
                 try:
                     item = parse_article(page, link, section)
                     if item:
@@ -362,13 +373,18 @@ def main():
                         print(f"OK: {item['title'][:90]}")
                 except Exception as exc:
                     print(f"Hiba: {link} — {exc}")
+
                 time.sleep(0.7)
 
             print(f"Mentett cikk ebből a rovatból: {count}")
 
         browser.close()
 
-    out_path.write_text(json.dumps(all_items, ensure_ascii=False, indent=2), encoding="utf-8")
+    out_path.write_text(
+        json.dumps(all_items, ensure_ascii=False, indent=2),
+        encoding="utf-8"
+    )
+
     print(f"\nKész: {out_path} — összesen {len(all_items)} cikk")
 
 
