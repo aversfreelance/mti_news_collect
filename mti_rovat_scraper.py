@@ -16,17 +16,45 @@ load_dotenv()
 
 MTI_USERNAME = os.getenv("MTI_USERNAME", "")
 MTI_PASSWORD = os.getenv("MTI_PASSWORD", "")
-MTI_LOGIN_URL = os.getenv("MTI_LOGIN_URL", "https://mti.hu/regisztralt-latogatok-bejelentkezes/realms/visitor/protocol/openid-connect/auth?response_type=code&client_id=frontend&redirect_uri=https%3A%2F%2Fmti.hu%2Fauth%2Fcallback%2Fvisitor&ui_locales=hu&code_challenge=vrdKEhV-vzssn4_f_gMQh99L1KrUFu8B2h3L0k1CjLo&code_challenge_method=S256&scope=openid+profile+email")
+
+# FONTOS:
+# Ide NE OpenID / code_challenge-es URL kerüljön.
+# A code_challenge sessionfüggő, GitHub Actionsben könnyen login-error?error=Configuration lesz belőle.
+MTI_LOGIN_URL = os.getenv(
+    "MTI_LOGIN_URL",
+    "https://mti.hu/regisztralt-latogatok-bejelentkezes"
+)
+
 OUTPUT_FILE = os.getenv("OUTPUT_FILE", "public/import/pest-megye-news.json")
 ARTICLES_PER_SECTION = int(os.getenv("ARTICLES_PER_SECTION", "5"))
 HEADLESS = os.getenv("HEADLESS", "1") != "0"
 
 SECTIONS = {
-    "kozelet": {"name": "Közélet", "url": "https://mti.hu/kozelet", "category": "hirek"},
-    "gazdasag": {"name": "Gazdaság", "url": "https://mti.hu/gazdasag", "category": "hirek"},
-    "vilag": {"name": "Külföld", "url": "https://mti.hu/vilag", "category": "hirek"},
-    "kultura": {"name": "Kultúra", "url": "https://mti.hu/kultura", "category": "turizmus"},
-    "sport": {"name": "Sport", "url": "https://mti.hu/sport", "category": "sport"},
+    "kozelet": {
+        "name": "Közélet",
+        "url": "https://mti.hu/kozelet",
+        "category": "hirek"
+    },
+    "gazdasag": {
+        "name": "Gazdaság",
+        "url": "https://mti.hu/gazdasag",
+        "category": "hirek"
+    },
+    "vilag": {
+        "name": "Külföld",
+        "url": "https://mti.hu/vilag",
+        "category": "hirek"
+    },
+    "kultura": {
+        "name": "Kultúra",
+        "url": "https://mti.hu/kultura",
+        "category": "turizmus"
+    },
+    "sport": {
+        "name": "Sport",
+        "url": "https://mti.hu/sport",
+        "category": "sport"
+    },
 }
 
 PEST_COUNTY_CITIES = [
@@ -92,6 +120,13 @@ def detect_pest_city(title: str, body: str) -> str:
 def looks_like_login_page(html: str, url: str = "") -> bool:
     text = clean_text(BeautifulSoup(html, "html.parser").get_text(" ")).lower()
     url_l = (url or "").lower()
+
+    if "login-error" in url_l:
+        return True
+
+    if "openid-connect" in url_l or "regisztralt-latogatok-bejelentkezes" in url_l:
+        return True
+
     markers = [
         "bejelentkezés szerződéssel rendelkezőként",
         "e-mail cím",
@@ -99,28 +134,30 @@ def looks_like_login_page(html: str, url: str = "") -> bool:
         "elfelejtette jelszavát",
         "belépés",
     ]
-    if "openid-connect" in url_l or "regisztralt-latogatok-bejelentkezes" in url_l:
-        return True
+
     return sum(1 for marker in markers if marker in text) >= 3
 
 
-def accept_cookies_if_present(page):
-    for selector in [
+def accept_cookies_if_present(page) -> None:
+    selectors = [
         'button:has-text("Minden süti elfogadása")',
+        'button:has-text("Kijelölt sütik elfogadása")',
         'button:has-text("Elfogadom")',
         'button:has-text("Rendben")',
-        'text=Minden süti elfogadása',
-    ]:
+    ]
+
+    for selector in selectors:
         try:
-            if page.locator(selector).first.is_visible(timeout=1500):
-                page.locator(selector).first.click()
+            button = page.locator(selector).first
+            if button.is_visible(timeout=1200):
+                button.click()
                 time.sleep(0.5)
                 return
         except Exception:
             pass
 
 
-def login(page):
+def login(page) -> None:
     if not MTI_USERNAME or not MTI_PASSWORD:
         raise RuntimeError("Hiányzik az MTI_USERNAME vagy MTI_PASSWORD GitHub Secret.")
 
@@ -128,33 +165,34 @@ def login(page):
     accept_cookies_if_present(page)
 
     try:
-        page.wait_for_load_state("networkidle", timeout=10000)
+        page.wait_for_load_state("networkidle", timeout=12000)
     except PlaywrightTimeoutError:
         pass
 
     print("Login oldal URL:", page.url)
 
     email_selectors = [
-        'input[type="email"]',
         'input[name="email"]',
+        'input[type="email"]',
         'input[id*="email" i]',
         'input[name="username"]',
         'input[id*="username" i]',
         'input[type="text"]',
     ]
+
     password_selectors = [
         'input[type="password"]',
         'input[name="password"]',
         'input[id*="password" i]',
     ]
 
-    email_field = None
-    password_field = None
+    email_selector = None
+    password_selector = None
 
     for selector in email_selectors:
         try:
             if page.locator(selector).first.is_visible(timeout=2000):
-                email_field = selector
+                email_selector = selector
                 break
         except Exception:
             pass
@@ -162,27 +200,34 @@ def login(page):
     for selector in password_selectors:
         try:
             if page.locator(selector).first.is_visible(timeout=2000):
-                password_field = selector
+                password_selector = selector
                 break
         except Exception:
             pass
 
-    if not email_field or not password_field:
+    if not email_selector or not password_selector:
         Path("debug-login.html").write_text(page.content(), encoding="utf-8")
         page.screenshot(path="debug-login.png", full_page=True)
-        raise RuntimeError("Nem találom az e-mail vagy jelszó mezőt. debug-login.html és debug-login.png elkészült.")
+        raise RuntimeError("Nem találom az e-mail vagy jelszó mezőt.")
 
-    print("E-mail mező:", email_field)
-    print("Jelszó mező:", password_field)
+    print("E-mail mező:", email_selector)
+    print("Jelszó mező:", password_selector)
 
-    page.fill(email_field, MTI_USERNAME)
-    page.fill(password_field, MTI_PASSWORD)
+    page.fill(email_selector, MTI_USERNAME)
+    page.fill(password_selector, MTI_PASSWORD)
 
     clicked = False
-    for selector in ['button:has-text("Belépés")', 'input[type="submit"]', 'button[type="submit"]']:
+    submit_selectors = [
+        'button:has-text("Belépés")',
+        'input[type="submit"]',
+        'button[type="submit"]',
+    ]
+
+    for selector in submit_selectors:
         try:
-            if page.locator(selector).first.is_visible(timeout=2000):
-                page.locator(selector).first.click()
+            button = page.locator(selector).first
+            if button.is_visible(timeout=2000):
+                button.click()
                 clicked = True
                 break
         except Exception:
@@ -202,43 +247,78 @@ def login(page):
     if looks_like_login_page(page.content(), page.url):
         Path("debug-after-login.html").write_text(page.content(), encoding="utf-8")
         page.screenshot(path="debug-after-login.png", full_page=True)
-        raise RuntimeError("MTI login sikertelen: továbbra is a bejelentkezési oldalon vagyunk.")
+        raise RuntimeError("MTI login sikertelen. Valószínűleg hibás login URL, session vagy belépési adat.")
 
 
 def is_article_link(href: str, text: str) -> bool:
     if not href:
         return False
-    href_l = href.lower()
+
+    href_l = href.lower().strip()
     text = clean_text(text)
-    
+
     if len(text) < 15:
         return False
-        
-bad_extensions = [
-    ".pdf",
-    ".doc",
-    ".docx",
-    ".xls",
-    ".xlsx",
-    ".zip"
-]
-if any(href.lower().endswith(ext) for ext in bad_extensions):
-    return False
+
+    bad_starts = [
+        "javascript:",
+        "mailto:",
+        "tel:",
+        "#",
+    ]
+
+    if any(href_l.startswith(prefix) for prefix in bad_starts):
+        return False
 
     bad_parts = [
-        "javascript:", "mailto:", "#", "/login", "/auth/", "/regisztralt-latogatok",
-        "suti", "adatvedelem", "impresszum"
+        "/login",
+        "/auth/",
+        "/regisztralt-latogatok",
+        "suti",
+        "adatvedelem",
+        "impresszum",
+        "kapcsolat",
+        "hirlevel",
     ]
+
     if any(part in href_l for part in bad_parts):
         return False
 
-    return urlparse(urljoin("https://mti.hu", href)).netloc.endswith("mti.hu")
+    bad_extensions = [
+        ".pdf",
+        ".doc",
+        ".docx",
+        ".xls",
+        ".xlsx",
+        ".zip",
+        ".rar",
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp",
+        ".gif",
+        ".mp4",
+        ".mp3",
+    ]
+
+    path = urlparse(href_l).path
+    if any(path.endswith(ext) for ext in bad_extensions):
+        return False
+
+    full_url = urljoin("https://mti.hu", href)
+    parsed = urlparse(full_url)
+
+    if not parsed.netloc.endswith("mti.hu"):
+        return False
+
+    return True
 
 
 def collect_section_links(page, section_url: str, limit: int) -> list[str]:
     page.goto(section_url, wait_until="domcontentloaded")
+
     try:
-        page.wait_for_load_state("networkidle", timeout=10000)
+        page.wait_for_load_state("networkidle", timeout=12000)
     except PlaywrightTimeoutError:
         pass
 
@@ -251,6 +331,7 @@ def collect_section_links(page, section_url: str, limit: int) -> list[str]:
     for a in soup.find_all("a", href=True):
         text = clean_text(a.get_text(" "))
         href = a.get("href", "")
+
         if is_article_link(href, text):
             full_url = urljoin(section_url, href)
             if full_url not in links:
@@ -260,12 +341,13 @@ def collect_section_links(page, section_url: str, limit: int) -> list[str]:
 
 
 def extract_image(soup: BeautifulSoup, base_url: str) -> str:
-    for tag in [
-        soup.find("meta", property="og:image"),
-        soup.find("meta", attrs={"name": "twitter:image"}),
-    ]:
-        if tag and tag.get("content"):
-            return urljoin(base_url, tag["content"])
+    og = soup.find("meta", property="og:image")
+    if og and og.get("content"):
+        return urljoin(base_url, og["content"])
+
+    twitter = soup.find("meta", attrs={"name": "twitter:image"})
+    if twitter and twitter.get("content"):
+        return urljoin(base_url, twitter["content"])
 
     article = soup.find("article") or soup.find("main") or soup.body
     if article:
@@ -278,13 +360,19 @@ def extract_image(soup: BeautifulSoup, base_url: str) -> str:
 
 
 def parse_article(page, url: str, section: dict) -> dict | None:
-    page.goto(url, wait_until="domcontentloaded")
+    try:
+        page.goto(url, wait_until="domcontentloaded", timeout=20000)
+    except Exception as exc:
+        print(f"Kihagyva, nem nyitható meg: {url} — {exc}")
+        return None
+
     try:
         page.wait_for_load_state("networkidle", timeout=10000)
     except PlaywrightTimeoutError:
         pass
 
     html = page.content()
+
     if looks_like_login_page(html, page.url):
         raise RuntimeError(f"Cikk helyett login oldal jött be: {url}")
 
@@ -338,7 +426,7 @@ def parse_article(page, url: str, section: dict) -> dict | None:
     }
 
 
-def main():
+def main() -> None:
     out_path = Path(OUTPUT_FILE)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -352,17 +440,20 @@ def main():
 
         login(page)
 
-        for section_key, section in SECTIONS.items():
+        for _, section in SECTIONS.items():
             print(f"Rovat: {section['name']} — {section['url']}")
+
             links = collect_section_links(page, section["url"], ARTICLES_PER_SECTION)
             print(f"Talált link: {len(links)}")
 
             saved = 0
+
             for link in links:
                 if link in seen_urls:
                     continue
 
                 item = parse_article(page, link, section)
+
                 if item:
                     all_items.append(item)
                     seen_urls.add(link)
@@ -375,7 +466,11 @@ def main():
 
         browser.close()
 
-    out_path.write_text(json.dumps(all_items, ensure_ascii=False, indent=2), encoding="utf-8")
+    out_path.write_text(
+        json.dumps(all_items, ensure_ascii=False, indent=2),
+        encoding="utf-8"
+    )
+
     print(f"Kész: {out_path} — összesen {len(all_items)} cikk")
 
 
