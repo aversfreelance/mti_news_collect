@@ -17,44 +17,19 @@ load_dotenv()
 MTI_USERNAME = os.getenv("MTI_USERNAME", "")
 MTI_PASSWORD = os.getenv("MTI_PASSWORD", "")
 
-# FONTOS:
-# Ide NE OpenID / code_challenge-es URL kerüljön.
-# A code_challenge sessionfüggő, GitHub Actionsben könnyen login-error?error=Configuration lesz belőle.
-MTI_LOGIN_URL = os.getenv(
-    "MTI_LOGIN_URL",
-    "https://mti.hu/regisztralt-latogatok-bejelentkezes"
-)
+# Fontos: ez a választóoldal, innen kattintunk a "Regisztrált látogatóként" opcióra.
+MTI_LOGIN_URL = os.getenv("MTI_LOGIN_URL", "https://mti.hu/bejelentkezes")
 
 OUTPUT_FILE = os.getenv("OUTPUT_FILE", "public/import/pest-megye-news.json")
 ARTICLES_PER_SECTION = int(os.getenv("ARTICLES_PER_SECTION", "5"))
 HEADLESS = os.getenv("HEADLESS", "1") != "0"
 
 SECTIONS = {
-    "kozelet": {
-        "name": "Közélet",
-        "url": "https://mti.hu/kozelet",
-        "category": "hirek"
-    },
-    "gazdasag": {
-        "name": "Gazdaság",
-        "url": "https://mti.hu/gazdasag",
-        "category": "hirek"
-    },
-    "vilag": {
-        "name": "Külföld",
-        "url": "https://mti.hu/vilag",
-        "category": "hirek"
-    },
-    "kultura": {
-        "name": "Kultúra",
-        "url": "https://mti.hu/kultura",
-        "category": "turizmus"
-    },
-    "sport": {
-        "name": "Sport",
-        "url": "https://mti.hu/sport",
-        "category": "sport"
-    },
+    "kozelet": {"name": "Közélet", "url": "https://mti.hu/kozelet", "category": "hirek"},
+    "gazdasag": {"name": "Gazdaság", "url": "https://mti.hu/gazdasag", "category": "hirek"},
+    "vilag": {"name": "Külföld", "url": "https://mti.hu/vilag", "category": "hirek"},
+    "kultura": {"name": "Kultúra", "url": "https://mti.hu/kultura", "category": "turizmus"},
+    "sport": {"name": "Sport", "url": "https://mti.hu/sport", "category": "sport"},
 }
 
 PEST_COUNTY_CITIES = [
@@ -134,19 +109,16 @@ def looks_like_login_page(html: str, url: str = "") -> bool:
         "elfelejtette jelszavát",
         "belépés",
     ]
-
     return sum(1 for marker in markers if marker in text) >= 3
 
 
 def accept_cookies_if_present(page) -> None:
-    selectors = [
+    for selector in [
         'button:has-text("Minden süti elfogadása")',
         'button:has-text("Kijelölt sütik elfogadása")',
         'button:has-text("Elfogadom")',
         'button:has-text("Rendben")',
-    ]
-
-    for selector in selectors:
+    ]:
         try:
             button = page.locator(selector).first
             if button.is_visible(timeout=1200):
@@ -155,6 +127,33 @@ def accept_cookies_if_present(page) -> None:
                 return
         except Exception:
             pass
+
+
+def click_registered_visitor(page) -> None:
+    selectors = [
+        'a:has-text("Regisztrált látogatóként")',
+        'button:has-text("Regisztrált látogatóként")',
+        'text=Regisztrált látogatóként',
+        'a[href*="regisztralt-latogatok-bejelentkezes"]',
+    ]
+
+    for selector in selectors:
+        try:
+            item = page.locator(selector).first
+            if item.is_visible(timeout=3000):
+                item.click()
+                try:
+                    page.wait_for_load_state("networkidle", timeout=15000)
+                except PlaywrightTimeoutError:
+                    pass
+                time.sleep(1)
+                return
+        except Exception:
+            pass
+
+    Path("debug-bejelentkezes.html").write_text(page.content(), encoding="utf-8")
+    page.screenshot(path="debug-bejelentkezes.png", full_page=True)
+    raise RuntimeError('Nem találom a "Regisztrált látogatóként" linket/gombot a https://mti.hu/bejelentkezes oldalon.')
 
 
 def login(page) -> None:
@@ -169,7 +168,11 @@ def login(page) -> None:
     except PlaywrightTimeoutError:
         pass
 
-    print("Login oldal URL:", page.url)
+    print("Belépés választóoldal URL:", page.url)
+
+    click_registered_visitor(page)
+
+    print("Regisztrált látogató login URL:", page.url)
 
     email_selectors = [
         'input[name="email"]',
@@ -191,7 +194,7 @@ def login(page) -> None:
 
     for selector in email_selectors:
         try:
-            if page.locator(selector).first.is_visible(timeout=2000):
+            if page.locator(selector).first.is_visible(timeout=4000):
                 email_selector = selector
                 break
         except Exception:
@@ -199,7 +202,7 @@ def login(page) -> None:
 
     for selector in password_selectors:
         try:
-            if page.locator(selector).first.is_visible(timeout=2000):
+            if page.locator(selector).first.is_visible(timeout=4000):
                 password_selector = selector
                 break
         except Exception:
@@ -217,16 +220,10 @@ def login(page) -> None:
     page.fill(password_selector, MTI_PASSWORD)
 
     clicked = False
-    submit_selectors = [
-        'button:has-text("Belépés")',
-        'input[type="submit"]',
-        'button[type="submit"]',
-    ]
-
-    for selector in submit_selectors:
+    for selector in ['button:has-text("Belépés")', 'input[type="submit"]', 'button[type="submit"]']:
         try:
             button = page.locator(selector).first
-            if button.is_visible(timeout=2000):
+            if button.is_visible(timeout=3000):
                 button.click()
                 clicked = True
                 break
@@ -247,7 +244,7 @@ def login(page) -> None:
     if looks_like_login_page(page.content(), page.url):
         Path("debug-after-login.html").write_text(page.content(), encoding="utf-8")
         page.screenshot(path="debug-after-login.png", full_page=True)
-        raise RuntimeError("MTI login sikertelen. Valószínűleg hibás login URL, session vagy belépési adat.")
+        raise RuntimeError("MTI login sikertelen. Továbbra is login oldalon vagyunk, vagy login-error jött vissza.")
 
 
 def is_article_link(href: str, text: str) -> bool:
@@ -260,45 +257,19 @@ def is_article_link(href: str, text: str) -> bool:
     if len(text) < 15:
         return False
 
-    bad_starts = [
-        "javascript:",
-        "mailto:",
-        "tel:",
-        "#",
-    ]
-
-    if any(href_l.startswith(prefix) for prefix in bad_starts):
+    if any(href_l.startswith(prefix) for prefix in ["javascript:", "mailto:", "tel:", "#"]):
         return False
 
     bad_parts = [
-        "/login",
-        "/auth/",
-        "/regisztralt-latogatok",
-        "suti",
-        "adatvedelem",
-        "impresszum",
-        "kapcsolat",
-        "hirlevel",
+        "/login", "/auth/", "/regisztralt-latogatok", "suti", "adatvedelem",
+        "impresszum", "kapcsolat", "hirlevel"
     ]
-
     if any(part in href_l for part in bad_parts):
         return False
 
     bad_extensions = [
-        ".pdf",
-        ".doc",
-        ".docx",
-        ".xls",
-        ".xlsx",
-        ".zip",
-        ".rar",
-        ".jpg",
-        ".jpeg",
-        ".png",
-        ".webp",
-        ".gif",
-        ".mp4",
-        ".mp3",
+        ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".zip", ".rar",
+        ".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".mp3"
     ]
 
     path = urlparse(href_l).path
@@ -308,10 +279,7 @@ def is_article_link(href: str, text: str) -> bool:
     full_url = urljoin("https://mti.hu", href)
     parsed = urlparse(full_url)
 
-    if not parsed.netloc.endswith("mti.hu"):
-        return False
-
-    return True
+    return parsed.netloc.endswith("mti.hu")
 
 
 def collect_section_links(page, section_url: str, limit: int) -> list[str]:
