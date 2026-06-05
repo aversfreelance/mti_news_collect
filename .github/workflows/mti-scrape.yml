@@ -21,7 +21,7 @@ jobs:
         env:
           MTI_USERNAME: ${{ secrets.MTI_USERNAME }}
           MTI_PASSWORD: ${{ secrets.MTI_PASSWORD }}
-          MTI_LOGIN_URL: 'https://mti.hu/regisztralt-latogatok-bejelentkezes/realms/visitor/protocol/openid-connect/auth?response_type=code&client_id=frontend&redirect_uri=https%3A%2F%2Fmti.hu%2Fauth%2Fcallback%2Fvisitor&ui_locales=hu&scope=openid+profile+email'
+MTI_LOGIN_URL: 'https://mti.hu/regisztralt-latogatok-bejelentkezes'
           OUTPUT_FILE: public/import/pest-megye-news.json
           ARTICLES_PER_SECTION: '5'
           HEADLESS: '1'
