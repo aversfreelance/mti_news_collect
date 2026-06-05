@@ -16,8 +16,7 @@ load_dotenv()
 
 MTI_USERNAME = os.getenv("MTI_USERNAME", "")
 MTI_PASSWORD = os.getenv("MTI_PASSWORD", "")
-MTI_LOGIN_URL = os.getenv("MTI_LOGIN_URL", "https://mti.hu")
-OUTPUT_FILE = os.getenv("OUTPUT_FILE", "public/import/pest-megye-news.json")
+MTI_LOGIN_URL = os.getenv("MTI_LOGIN_URL", "https://mti.hu")OUTPUT_FILE = os.getenv("OUTPUT_FILE", "public/import/pest-megye-news.json")
 ARTICLES_PER_SECTION = int(os.getenv("ARTICLES_PER_SECTION", "5"))
 HEADLESS = os.getenv("HEADLESS", "1") != "0"
 
