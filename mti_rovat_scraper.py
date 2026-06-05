@@ -213,6 +213,7 @@ def is_article_link(href: str, text: str) -> bool:
     
     if len(text) < 15:
         return False
+        
 bad_extensions = [
     ".pdf",
     ".doc",
